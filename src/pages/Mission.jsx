@@ -81,6 +81,9 @@ export default function Mission() {
             <section key={s.heading} className="m-block mt-12">
               <h2 className="display text-2xl font-bold sm:text-[28px]">{s.heading}</h2>
               <p className="mt-4 text-[19px] leading-[1.75] text-fg/85 sm:text-xl">{s.text}</p>
+              {s.paragraphs.map((para) => (
+                <p key={para.slice(0, 32)} className="mt-5 text-[19px] leading-[1.75] text-fg/85 sm:text-xl">{para}</p>
+              ))}
               {s.tip && (
                 <div className="m-tip mt-6 flex items-start gap-4 rounded-3xl p-5" style={{ background: `${w.c}1c`, boxShadow: `inset 0 0 0 2px ${w.c}55` }}>
                   <Avatar mascot={w.id} size={44} />
@@ -92,6 +95,15 @@ export default function Mission() {
               )}
             </section>
           ))}
+
+          {blog.conclusion.length > 0 && (
+            <section className="m-block mt-12">
+              <h2 className="display text-2xl font-bold sm:text-[28px]">Para fechar</h2>
+              {blog.conclusion.map((para) => (
+                <p key={para.slice(0, 32)} className="mt-5 text-[19px] leading-[1.75] text-fg/85 sm:text-xl">{para}</p>
+              ))}
+            </section>
+          )}
 
           {blog.quote && (
             <blockquote className="on-color m-block relative mt-12 overflow-hidden rounded-[28px] p-8 sm:p-10" style={{ background: `linear-gradient(135deg, ${w.c}, ${w.deep})` }}>

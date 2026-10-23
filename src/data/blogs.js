@@ -1,4 +1,4 @@
-export const BLOGS = {
+const BASE = {
   tecnologia: [
     {
       title: "Apps e ferramentas que todo criador deve conhecer",
@@ -375,3 +375,42 @@ export const BLOGS = {
   ],
 
 };
+
+// ------------------------------------------------------------------
+// Texto longo de cada artigo (src/data/longform/<mundo>.js), indexado
+// pela posição do artigo: `deep` = parágrafos extras de cada seção,
+// `more` = seções novas, `conclusion` = fechamento.
+// O tempo de leitura é calculado a partir do texto final (200 palavras/min).
+// ------------------------------------------------------------------
+import tecnologia from "./longform/tecnologia.js";
+import politica from "./longform/politica.js";
+import alimentacao from "./longform/alimentacao.js";
+import esportes from "./longform/esportes.js";
+import estudos from "./longform/estudos.js";
+import saudemental from "./longform/saudemental.js";
+
+const LONG = { tecnologia, politica, alimentacao, esportes, estudos, saudemental };
+const WPM = 200;
+
+const countWords = (b) =>
+  [
+    b.title, b.intro, b.quote || "", ...(b.checklist?.items || []), ...(b.conclusion || []),
+    ...b.sections.flatMap((s) => [s.heading, s.text, s.tip || "", ...(s.paragraphs || [])]),
+  ].join(" ").split(/\s+/).filter(Boolean).length;
+
+function expand(base, extra = {}) {
+  const sections = base.sections.map((s, i) => ({ ...s, paragraphs: extra.deep?.[i] || [] }));
+  const n = sections.length;
+  (extra.more || []).forEach((m, k) => {
+    const [first, ...rest] = m.paragraphs;
+    sections.push({ heading: `${n + k + 1}. ${m.heading}`, text: first, paragraphs: rest, tip: m.tip });
+  });
+  const blog = { ...base, sections, conclusion: extra.conclusion || [] };
+  blog.words = countWords(blog);
+  blog.readTime = `${Math.max(1, Math.round(blog.words / WPM))} min`;
+  return blog;
+}
+
+export const BLOGS = Object.fromEntries(
+  Object.entries(BASE).map(([world, list]) => [world, list.map((b, i) => expand(b, LONG[world]?.[i]))])
+);
