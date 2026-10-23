@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { ScrollTrigger, reducedMotion } from "./lib/gsap";
-import { checkIn } from "./lib/store";
+import { checkIn, startOnline } from "./lib/store";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import GameFX from "./components/GameFX";
@@ -16,12 +16,14 @@ import Profile from "./pages/Profile";
 import Admin from "./pages/Admin";
 import Arcade from "./pages/Arcade";
 import Play from "./pages/Play";
+import Ranking from "./pages/Ranking";
 
 export default function App() {
   const { pathname, hash } = useLocation();
 
   useEffect(() => {
     checkIn();
+    startOnline();
     document.fonts?.ready.then(() => ScrollTrigger.refresh());
   }, []);
 
@@ -46,6 +48,7 @@ export default function App() {
           <Route path="/mundo/:worldId/:index" element={<Mission />} />
           <Route path="/comunidade" element={<Community />} />
           <Route path="/jogos" element={<Arcade />} />
+          <Route path="/ranking" element={<Ranking />} />
           <Route path="/jogos/:gameId" element={<Play />} />
           <Route path="/entrar" element={<Auth />} />
           <Route path="/perfil" element={<Profile />} />

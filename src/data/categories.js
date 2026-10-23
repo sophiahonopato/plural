@@ -42,3 +42,6 @@ export const WORLDS = [
 export const worldById = (id) => WORLDS.find((w) => w.id === id);
 export const avatarOf = (id) => `/avatars/${id}.webp`;
 export const bannerOf = (id) => `/banners/${id}.webp`;
+// Recortes centralizados no mascote: vertical (4:5) e horizontal (16:9)
+export const cardOf = (id) => `/banners/card-${id}.webp`;
+export const wideOf = (id) => `/banners/wide-${id}.webp`;

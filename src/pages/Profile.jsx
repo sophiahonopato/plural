@@ -1,12 +1,13 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { gsap, useGSAP, reducedMotion } from "../lib/gsap";
-import { WORLDS, bannerOf, worldById } from "../data/categories";
+import { WORLDS, wideOf, worldById } from "../data/categories";
 import { BLOGS } from "../data/blogs";
 import { BADGES, TOTAL_MISSIONS, levelInfo, readIn } from "../data/game";
 import { useSession } from "../lib/session";
-import { isAdmin, logOut, progressOf, updateProfile } from "../lib/store";
+import { ONLINE, isAdmin, loadUser, logOut, progressOf, rankOf, updateProfile } from "../lib/store";
+import Loading from "../components/Loading";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
 import Tilt from "../components/Tilt";
@@ -59,6 +60,18 @@ export default function Profile() {
   const { state, user: me } = useSession();
   const [editing, setEditing] = useState(false);
   const user = handle ? state.users.find((u) => u.handle === handle) : me;
+  // perfil de outra pessoa que ainda não veio do banco: busca na hora
+  const [lookup, setLookup] = useState({});
+  useEffect(() => {
+    if (!ONLINE || !handle || user || lookup[handle]) return;
+    setLookup((l) => ({ ...l, [handle]: "loading" }));
+    loadUser(handle).then((found) => setLookup((l) => ({ ...l, [handle]: found ? "done" : "missing" })));
+  }, [handle, user, lookup]);
+  const [rank, setRank] = useState(null);
+  const xpNow = user ? progressOf(state, user.id).xp : 0;
+  useEffect(() => {
+    if (user) rankOf(user.id).then(setRank);
+  }, [user?.id, xpNow]);
 
   useGSAP(() => {
     if (!user || reducedMotion()) return;
@@ -71,6 +84,7 @@ export default function Profile() {
     gsap.from(".p-world > i", { scaleX: 0, transformOrigin: "0 50%", duration: 1, stagger: 0.08, ease: "power3.out", scrollTrigger: { trigger: ".p-worlds", start: "top 88%" } });
   }, { scope: root, dependencies: [user?.id], revertOnUpdate: true });
 
+  if (!state.ready || (handle && !user && lookup[handle] !== "missing")) return <Loading label="Carregando perfil…" />;
   if (!user) return <Navigate to={handle ? "/comunidade" : "/entrar"} replace />;
 
   const mine = !!me && me.id === user.id;
@@ -83,12 +97,13 @@ export default function Profile() {
     { icon: "book", label: "Missões", value: `${p.read.length}/${TOTAL_MISSIONS}`, c: "#2D9CFF" },
     { icon: "send", label: "Posts", value: <CountUp value={p.posts} />, c: "#FF2D87" },
     { icon: "flame", label: "Sequência", value: `${p.streak} ${p.streak === 1 ? "dia" : "dias"}`, c: "#FF8A1F" },
+    { icon: "trophy", label: "No ranking", value: rank ? `#${rank}` : "…", c: "#A24BFF", to: "/ranking" },
   ];
 
   return (
     <div ref={root} key={user.id} className="mx-auto max-w-5xl px-4 pt-20" style={{ "--c": w.c, "--deep": w.deep }}>
       <div className="relative overflow-hidden rounded-[32px] border border-fg/15" style={{ background: w.deep }}>
-        <div className="p-banner art h-44 sm:h-60" style={{ "--img": `url(${bannerOf(w.id)})`, backgroundSize: "cover" }} />
+        <div className="p-banner art h-44 sm:h-60" style={{ "--img": `url(${wideOf(w.id)})`, backgroundSize: "cover", backgroundPosition: "center 38%" }} />
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
       </div>
 
@@ -123,14 +138,17 @@ export default function Profile() {
         </div>
       </section>
 
-      <section className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
-        {stats.map((s) => (
-          <div key={s.label} className="p-stat panel p-5">
+      <section className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-5">
+        {stats.map((s) => {
+          const Box = s.to ? Link : "div";
+          return (
+          <Box key={s.label} to={s.to} className={`p-stat panel block p-5 ${s.to ? "transition-transform hover:-translate-y-1" : ""}`}>
             <span className="grid h-10 w-10 place-items-center rounded-xl" style={{ background: `${s.c}22`, color: s.c }}><Icon name={s.icon} fill={s.icon !== "book" && s.icon !== "send"} size={18} /></span>
             <p className="display mt-4 text-2xl font-black tabular-nums">{s.value}</p>
             <p className="text-sm font-bold text-mist">{s.label}</p>
-          </div>
-        ))}
+          </Box>
+          );
+        })}
       </section>
 
       <div className="mt-10 grid gap-10 lg:grid-cols-[1.2fr_1fr]">

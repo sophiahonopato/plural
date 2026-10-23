@@ -26,6 +26,7 @@ const LINKS = [
   { to: "/", label: "Início", icon: "home", end: true },
   { to: "/#mundos", label: "Mundos", icon: "compass" },
   { to: "/jogos", label: "Jogos", icon: "gamepad" },
+  { to: "/ranking", label: "Ranking", icon: "trophy", desktop: true },
   { to: "/comunidade", label: "Comunidade", icon: "users" },
 ];
 
@@ -87,7 +88,7 @@ export default function Navbar() {
 
       {/* Barra inferior no celular */}
       <nav className="fixed inset-x-3 bottom-3 z-50 grid grid-cols-5 rounded-2xl border border-fg/10 bg-surface/90 p-1.5 backdrop-blur-xl md:hidden">
-        {[...LINKS, { to: user ? "/perfil" : "/entrar", label: user ? "Perfil" : "Entrar", icon: "user" }].map((l) => {
+        {[...LINKS.filter((l) => !l.desktop), { to: user ? "/perfil" : "/entrar", label: user ? "Perfil" : "Entrar", icon: "user" }].map((l) => {
           const on = l.icon === "user" ? pathname === "/perfil" || pathname === "/entrar" : isActive(l);
           return (
             <Link key={l.label} to={l.to} className={`relative flex flex-col items-center gap-0.5 rounded-xl py-1.5 text-[10px] font-bold ${on ? "text-fg" : "text-mist"}`}>

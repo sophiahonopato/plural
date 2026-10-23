@@ -14,7 +14,10 @@ export default function Avatar({ mascot, size = 44, ring = true, className = "" 
     >
       {w && (
         <img
-          src={avatarOf(w.id)} alt={w.mascot} width={size} height={size} draggable={false}
+          src={avatarOf(w.id)}
+          srcSet={`/avatars/sm/${w.id}.webp 160w, ${avatarOf(w.id)} 640w`}
+          sizes={`${size}px`}
+          alt={w.mascot} width={size} height={size} draggable={false} decoding="async"
           className="block h-full w-full rounded-full object-cover"
         />
       )}

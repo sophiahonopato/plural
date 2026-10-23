@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { gsap, Draggable, useGSAP } from "../lib/gsap";
-import { WORLDS, bannerOf } from "../data/categories";
+import { WORLDS, cardOf } from "../data/categories";
 import { BLOGS } from "../data/blogs";
 import { readIn } from "../data/game";
 import { useSession } from "../lib/session";
@@ -107,7 +107,7 @@ export default function WorldCarousel() {
           <div className="wc-ring">
             {WORLDS.map((x, i) => (
               <div key={x.id} data-idx={i} className="wc-card on-color" style={{ "--i": i, "--c": x.c, "--deep": x.deep }}>
-                <div className="art absolute inset-x-0 top-0 h-[80%]" style={{ "--img": `url(${bannerOf(x.id)})`, WebkitMaskImage: "linear-gradient(#000 78%, transparent)", maskImage: "linear-gradient(#000 78%, transparent)" }} />
+                <div className="art absolute inset-x-0 top-0 h-[80%]" style={{ "--img": `url(${cardOf(x.id)})`, backgroundSize: "cover", backgroundPosition: "center 15%", WebkitMaskImage: "linear-gradient(#000 78%, transparent)", maskImage: "linear-gradient(#000 78%, transparent)" }} />
                 <div className="absolute inset-x-0 bottom-0 p-4 text-center">
                   <p className="text-[10px] font-extrabold uppercase tracking-[.2em] text-fg/75">{x.mascot}</p>
                   <p className="display mt-1 text-lg font-black leading-tight text-fg sm:text-xl">{x.name.split(" ")[0]}</p>

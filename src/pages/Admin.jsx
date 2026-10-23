@@ -5,12 +5,14 @@ import { Navigate } from "react-router-dom";
 import { authorOf, deletePost, deleteUser, isAdmin, progressOf } from "../lib/store";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
+import Loading from "../components/Loading";
 
 export default function Admin() {
   const { state, user } = useSession();
   const [tab, setTab] = useState("posts");
 
   // Só a conta de moderação vê o painel; qualquer outra pessoa volta pro início.
+  if (!state.ready) return <Loading />;
   if (!isAdmin(user)) return <Navigate to="/" replace />;
 
   const posts = [...state.posts].sort((a, b) => b.ts - a.ts);
@@ -45,7 +47,7 @@ export default function Admin() {
             <Avatar mascot={u.mascot} size={36} />
             <div className="min-w-0 flex-1">
               <p className="truncate font-bold">{u.name} <span className="font-medium text-mist">@{u.handle}</span></p>
-              <p className="truncate text-sm text-mist">{u.email} · {progressOf(state, u.id).xp} XP</p>
+              <p className="truncate text-sm text-mist">{u.email ? `${u.email} · ` : ""}{progressOf(state, u.id).xp} XP</p>
             </div>
             <button type="button" className="btn btn-sm btn-ghost !text-[#C81E1E]" onClick={() => window.confirm(`Remover a conta de ${u.name} e todos os posts dela?`) && deleteUser(u.id)}><Icon name="trash" size={15} /> Remover</button>
           </li>

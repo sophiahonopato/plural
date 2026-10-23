@@ -1,25 +1,30 @@
 // ------------------------------------------------------------------
 // STORE — contas, sessão, posts e progresso do jogo.
 //
-// Tudo fica no localStorage do navegador, então o site funciona sem
-// servidor. Isso também significa que cada navegador tem a própria
-// "comunidade". Pra virar multiusuário de verdade, troque `load` e
-// `commit` por chamadas a um backend (Supabase, Firebase, API própria)
-// — o resto do app só conversa com as funções exportadas daqui.
+// Dois modos:
+// - ONLINE (Supabase configurado no .env): contas, posts, curtidas e XP
+//   ficam no banco e são compartilhados entre todo mundo, em tempo real.
+//   O app atualiza a tela na hora (otimista) e manda a mudança pro banco.
+// - Local (sem .env): tudo fica no localStorage deste navegador.
+// O resto do app só conversa com as funções exportadas daqui.
 // ------------------------------------------------------------------
 import { useSyncExternalStore } from "react";
+import { ONLINE, authMessage, db, toPost, toUser } from "./remote";
 import { WORLDS, worldById } from "../data/categories";
 import { BADGES, DAILY, DAILY_CAPS, GAME_CAP, XP, levelInfo, missionKey } from "../data/game";
 
 const KEY = "plural:v2";
 export const MAX_POST = 280;
-// Contas com acesso ao painel de moderação (pelo e-mail do login).
-// Enquanto o site não tiver servidor, essa checagem roda no navegador e serve
-// pra esconder o painel, não como segurança de verdade.
+// Contas que veem o painel de moderação (pelo e-mail do login). No modo online
+// quem garante a permissão de verdade é a tabela `admins` do banco.
 export const ADMIN_EMAILS = ["sophiahonoratodev@gmail.com"];
 export const isAdmin = (user) => !!user && ADMIN_EMAILS.includes(user.email);
 
 const uid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+const uuid = () =>
+  globalThis.crypto?.randomUUID?.() ||
+  "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (c ^ (Math.random() * 16) >> (c / 4)).toString(16));
+export { ONLINE };
 const dayOf = (d) => d.toLocaleDateString("sv"); // AAAA-MM-DD no fuso local
 const today = () => dayOf(new Date());
 const yesterday = () => dayOf(new Date(Date.now() - 864e5));
@@ -33,13 +38,14 @@ function seedPosts() {
 }
 
 function load() {
+  if (ONLINE) return { users: [], session: null, posts: [], progress: {}, ready: false };
   try {
     const saved = JSON.parse(localStorage.getItem(KEY));
     if (saved && Array.isArray(saved.posts) && Array.isArray(saved.users)) {
-      return { session: null, progress: {}, ...saved };
+      return { session: null, progress: {}, ...saved, ready: true };
     }
   } catch (e) { /* primeira visita ou storage indisponível */ }
-  return { users: [], session: null, posts: seedPosts(), progress: {} };
+  return { users: [], session: null, posts: seedPosts(), progress: {}, ready: true };
 }
 
 let state = load();
@@ -47,7 +53,9 @@ const subs = new Set();
 
 function commit(next) {
   state = next;
-  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* modo privado */ }
+  if (!ONLINE) {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* modo privado */ }
+  }
   subs.forEach((fn) => fn());
 }
 
@@ -55,7 +63,7 @@ const subscribe = (fn) => { subs.add(fn); return () => subs.delete(fn); };
 export const getState = () => state;
 export const useStore = () => useSyncExternalStore(subscribe, getState);
 
-if (typeof window !== "undefined") {
+if (typeof window !== "undefined" && !ONLINE) {
   window.addEventListener("storage", (e) => {
     if (e.key !== KEY) return;
     state = load();
@@ -136,6 +144,7 @@ function run(base, userId, mutate) {
   const { next, events } = play(base, userId, mutate);
   commit(next);
   emit(events);
+  saveMine();
 }
 
 // ---- contas ----
@@ -166,6 +175,17 @@ export async function signUp({ name, email, password, mascot }) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Esse e-mail não parece válido.");
   if (password.length < 6) throw new Error("A senha precisa de pelo menos 6 caracteres.");
   if (!worldById(mascot)) throw new Error("Escolha um personagem para continuar.");
+  if (ONLINE) {
+    const { data, error } = await db.auth.signUp({
+      email, password,
+      options: { data: { name: name.slice(0, 30), mascot, handle: makeHandle(name, state.users) } },
+    });
+    if (error) throw new Error(authMessage(error));
+    if (!data.session) throw new Error("Conta criada! Confirme pelo link que enviamos pro seu e-mail e depois entre.");
+    await adopt(data.session);
+    run(state, data.session.user.id, (p, gain) => gain(XP.signup, "Bem-vindo ao Plural"));
+    return currentUser(state);
+  }
   if (state.users.some((u) => u.email === email)) throw new Error("Já existe uma conta com esse e-mail. Tente entrar.");
 
   const salt = uid();
@@ -176,13 +196,22 @@ export async function signUp({ name, email, password, mascot }) {
 }
 
 export async function logIn({ email, password }) {
+  if (ONLINE) {
+    const { data, error } = await db.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+    if (error) throw new Error(authMessage(error));
+    await adopt(data.session);
+    return currentUser(state);
+  }
   const user = state.users.find((u) => u.email === email.trim().toLowerCase());
   if (!user || (await hashPassword(password, user.salt)) !== user.hash) throw new Error("E-mail ou senha incorretos.");
   run({ ...state, session: user.id }, user.id);
   return user;
 }
 
-export const logOut = () => commit({ ...state, session: null });
+export function logOut() {
+  if (ONLINE) db.auth.signOut();
+  commit({ ...state, session: null });
+}
 
 // Chamado quando o app abre: conta o dia na sequência e dá o bônus diário.
 export function checkIn() {
@@ -198,6 +227,7 @@ export function updateProfile(patch) {
   if (typeof patch.bio === "string") clean.bio = patch.bio.trim().slice(0, 140);
   if (worldById(patch.mascot)) clean.mascot = patch.mascot;
   commit({ ...state, users: state.users.map((u) => (u.id === me.id ? { ...u, ...clean } : u)) });
+  if (ONLINE) send(db.from("profiles").update(clean).eq("id", me.id), "Não deu pra salvar o perfil.");
 }
 
 // ---- ações ----
@@ -238,13 +268,20 @@ export function createPost({ text, topic, replyTo = null, mission = null }) {
   const me = currentUser(state);
   text = text.trim().slice(0, MAX_POST);
   if (!me || !text || !worldById(topic)) return null;
-  const post = { id: uid(), userId: me.id, topic, text, ts: Date.now(), likes: [], replyTo, mission };
+  const post = { id: ONLINE ? uuid() : uid(), userId: me.id, topic, text, ts: Date.now(), likes: [], replyTo, mission };
   run({ ...state, posts: [post, ...state.posts] }, me.id, (p, gain) => {
     const kind = replyTo ? "reply" : "post";
     if (replyTo) p.replies += 1; else p.posts += 1;
     p.daily[kind] += 1;
     if (p.daily[kind] <= DAILY_CAPS[kind]) gain(XP[kind], replyTo ? "Resposta enviada" : "Post publicado");
   });
+  if (ONLINE) {
+    db.from("posts").insert({ id: post.id, user_id: me.id, topic, text, reply_to: replyTo, mission }).then(({ error }) => {
+      if (!error) return;
+      commit({ ...state, posts: state.posts.filter((x) => x.id !== post.id) });
+      notify(error.message.includes("Calma") ? error.message : "Não deu pra publicar. Tente de novo.");
+    });
+  }
   return post;
 }
 
@@ -258,6 +295,12 @@ export function toggleLike(postId) {
   );
   // XP só na primeira curtida de cada post alheio — descurtir e curtir de novo não rende.
   const firstTime = !liked && post.userId !== me.id && !progressOf(state, me.id).likedIds.includes(postId);
+  if (ONLINE) {
+    const q = liked
+      ? db.from("likes").delete().eq("post_id", postId).eq("user_id", me.id)
+      : db.from("likes").insert({ post_id: postId, user_id: me.id });
+    send(q, "Não deu pra salvar a curtida.");
+  }
   if (!firstTime) return commit({ ...state, posts });
   run({ ...state, posts }, me.id, (p, gain) => {
     p.likedIds.push(postId);
@@ -273,6 +316,7 @@ export function toggleBookmark(postId) {
   const p = progressOf(state, me.id);
   const bookmarks = p.bookmarks.includes(postId) ? p.bookmarks.filter((id) => id !== postId) : [...p.bookmarks, postId];
   commit({ ...state, progress: { ...state.progress, [me.id]: { ...p, bookmarks } } });
+  saveMine();
 }
 
 export function deletePost(postId, { asAdmin = false } = {}) {
@@ -280,10 +324,12 @@ export function deletePost(postId, { asAdmin = false } = {}) {
   const post = state.posts.find((p) => p.id === postId);
   if (!post || !me || !(post.userId === me.id || (asAdmin && isAdmin(me)))) return;
   commit({ ...state, posts: state.posts.filter((p) => p.id !== postId && p.replyTo !== postId) });
+  if (ONLINE) send(db.from("posts").delete().eq("id", postId), "Não deu pra apagar o post.");
 }
 
 export function deleteUser(userId) {
   if (!isAdmin(currentUser(state))) return;
+  if (ONLINE) send(db.from("profiles").delete().eq("id", userId), "Não deu pra remover a conta.");
   const gone = new Set(state.posts.filter((p) => p.userId === userId).map((p) => p.id));
   const progress = { ...state.progress };
   delete progress[userId];
@@ -294,4 +340,150 @@ export function deleteUser(userId) {
     posts: state.posts.filter((p) => !gone.has(p.id) && !gone.has(p.replyTo)).map((p) => ({ ...p, likes: p.likes.filter((id) => id !== userId) })),
     progress,
   });
+}
+
+// =====================================================================
+// MODO ONLINE — sincronização com o Supabase
+// =====================================================================
+
+// Manda uma requisição e, se falhar, avisa e recarrega do banco.
+function send(query, message) {
+  query.then(({ error }) => {
+    if (!error) return;
+    console.error(error);
+    notify(message);
+    pull();
+  });
+}
+
+// Salva o progresso de quem está logado. As gravações vão em fila e cada
+// uma manda o estado mais recente, então cliques rápidos viram uma só.
+let saving = Promise.resolve();
+let dirty = false;
+function saveMine() {
+  if (!ONLINE || !state.session) return;
+  dirty = true;
+  saving = saving.then(async () => {
+    if (!dirty || !state.session) return;
+    dirty = false;
+    const id = state.session;
+    const p = progressOf(state, id);
+    const { error } = await db.from("progress").update({ xp: p.xp, data: p }).eq("user_id", id);
+    if (error) {
+      console.error(error);
+      notify(error.message.includes("Limite") ? error.message : "Não deu pra salvar seu progresso.");
+      await loadMine(id); // volta pro que está no banco
+    }
+  });
+}
+
+async function loadMine(id) {
+  const { data } = await db.from("progress").select("xp, data").eq("user_id", id).maybeSingle();
+  if (data) commit({ ...state, progress: { ...state.progress, [id]: { ...data.data, xp: data.xp } } });
+}
+
+// Sessão do Supabase Auth → perfil + progresso no estado.
+async function adopt(session) {
+  if (!session) { commit({ ...state, session: null }); return; }
+  const id = session.user.id;
+  const [{ data: prof }, { data: prog }] = await Promise.all([
+    db.from("profiles").select("*").eq("id", id).maybeSingle(),
+    db.from("progress").select("xp, data").eq("user_id", id).maybeSingle(),
+  ]);
+  if (!prof) { // conta removida pela moderação
+    await db.auth.signOut();
+    commit({ ...state, session: null });
+    notify("Essa conta foi removida.");
+    return;
+  }
+  const me = { ...toUser(prof), email: session.user.email };
+  commit({
+    ...state,
+    session: id,
+    users: [...state.users.filter((u) => u.id !== id), me],
+    progress: { ...state.progress, [id]: { ...(prog?.data || {}), xp: prog?.xp || 0 } },
+  });
+  checkIn();
+}
+
+// Busca posts recentes (com autores e curtidas) e o top 50 do ranking.
+let pulling = null;
+export function pull() {
+  if (!ONLINE) return Promise.resolve();
+  pulling ||= (async () => {
+    const [posts, top] = await Promise.all([
+      db.from("posts").select("*, likes(user_id), author:profiles!posts_user_id_fkey(*)").order("created_at", { ascending: false }).limit(300),
+      db.from("progress").select("user_id, xp, data, profile:profiles(*)").order("xp", { ascending: false }).limit(50),
+    ]);
+    if (posts.error || top.error) {
+      console.error(posts.error || top.error);
+      if (!state.ready) notify("Não foi possível carregar a comunidade agora.");
+      commit({ ...state, ready: true });
+      return;
+    }
+    const users = new Map(state.users.map((u) => [u.id, u]));
+    const progress = { ...state.progress };
+    const addUser = (r) => { if (r && !users.has(r.id)) users.set(r.id, toUser(r)); else if (r) users.set(r.id, { ...users.get(r.id), ...toUser(r) }); };
+    for (const r of top.data) {
+      addUser(r.profile);
+      if (r.user_id !== state.session) progress[r.user_id] = { ...r.data, xp: r.xp };
+    }
+    for (const r of posts.data) addUser(r.author);
+    // nível dos autores que não estão no top 50
+    const missing = [...users.keys()].filter((id) => !progress[id] && id !== state.session);
+    if (missing.length) {
+      const { data } = await db.from("progress").select("user_id, xp, data").in("user_id", missing);
+      for (const r of data || []) progress[r.user_id] = { ...r.data, xp: r.xp };
+    }
+    commit({ ...state, users: [...users.values()], posts: posts.data.map(toPost), progress, ready: true });
+  })().finally(() => { pulling = null; });
+  return pulling;
+}
+
+// Perfil de alguém que ainda não está carregado (ex.: link /u/handle).
+export async function loadUser(handle) {
+  if (!ONLINE) return null;
+  const { data: prof } = await db.from("profiles").select("*").eq("handle", handle).maybeSingle();
+  if (!prof) return null;
+  const { data: prog } = await db.from("progress").select("xp, data").eq("user_id", prof.id).maybeSingle();
+  commit({
+    ...state,
+    users: [...state.users.filter((u) => u.id !== prof.id), toUser(prof)],
+    progress: { ...state.progress, [prof.id]: { ...(prog?.data || {}), xp: prog?.xp || 0 } },
+  });
+  return prof;
+}
+
+// Posição de alguém no ranking geral (1 = primeiro lugar).
+export async function rankOf(userId) {
+  const xp = progressOf(state, userId).xp;
+  if (!ONLINE) return Object.values(state.users).filter((u) => progressOf(state, u.id).xp > xp).length + 1;
+  const { count } = await db.from("progress").select("user_id", { count: "exact", head: true }).gt("xp", xp);
+  return (count || 0) + 1;
+}
+
+// Liga tudo: sessão salva, primeira carga e atualizações ao vivo.
+export async function startOnline() {
+  if (!ONLINE || startOnline.started) return;
+  startOnline.started = true;
+  try {
+    const { data } = await db.auth.getSession();
+    await adopt(data.session);
+    await pull();
+  } catch (e) {
+    console.error(e);
+    notify("Sem conexão com o servidor. Tente recarregar a página.");
+    commit({ ...state, ready: true });
+  }
+  db.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_OUT" && state.session) commit({ ...state, session: null });
+  });
+  let timer;
+  const refresh = () => { clearTimeout(timer); timer = setTimeout(pull, 400); };
+  db.channel("plural-ao-vivo")
+    .on("postgres_changes", { event: "*", schema: "public", table: "posts" }, refresh)
+    .on("postgres_changes", { event: "*", schema: "public", table: "likes" }, refresh)
+    .on("postgres_changes", { event: "*", schema: "public", table: "progress" }, refresh)
+    .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, refresh)
+    .subscribe();
 }

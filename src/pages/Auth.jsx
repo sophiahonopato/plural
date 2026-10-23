@@ -2,7 +2,7 @@ import { lazy, Suspense, useRef, useState } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { gsap, useGSAP, reducedMotion } from "../lib/gsap";
-import { WORLDS, bannerOf, worldById } from "../data/categories";
+import { WORLDS, cardOf, worldById } from "../data/categories";
 import { XP } from "../data/game";
 import { useSession } from "../lib/session";
 import { logIn, signUp } from "../lib/store";
@@ -67,7 +67,7 @@ export default function Auth() {
         <div className="on-color relative hidden min-h-[560px] overflow-hidden md:block" style={{ background: `linear-gradient(180deg, ${creating ? w.c : "#8B3DFF"}, ${creating ? w.deep : "#3B0C82"})`, transition: "background .4s" }}>
           {creating ? (
             <>
-              <div key={w.id} className="auth-art art absolute inset-0" style={{ "--img": `url(${bannerOf(w.id)})`, backgroundSize: "auto 62%", backgroundPosition: "center 30%" }} />
+              <div key={w.id} className="auth-art art absolute inset-0" style={{ "--img": `url(${cardOf(w.id)})`, backgroundSize: "cover", backgroundPosition: "center top" }} />
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-8 pt-20">
                 <p className="text-xs font-extrabold uppercase tracking-[.2em] text-fg/75">Você joga com</p>
                 <p className="display mt-1 text-4xl font-black">{w.mascot}</p>

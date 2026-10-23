@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { gsap, useGSAP, reducedMotion } from "../lib/gsap";
-import { WORLDS, bannerOf, worldById } from "../data/categories";
+import { WORLDS, bannerOf, wideOf, worldById } from "../data/categories";
 import { BLOGS } from "../data/blogs";
 import { XP, missionKey, readIn } from "../data/game";
 import { useSession } from "../lib/session";
@@ -63,9 +63,14 @@ export default function World() {
     <div ref={root} key={w.id} style={{ "--c": w.c, "--deep": w.deep }}>
       <section className="w-hero relative overflow-hidden px-3 pt-20">
         <div className="on-color relative mx-auto max-w-6xl overflow-hidden rounded-[32px]" style={{ background: w.deep }}>
-          <img src={bannerOf(w.id)} alt={`${w.mascot}, mascote de ${w.name}`} width={1686} height={498} className="w-banner h-[300px] w-full object-cover sm:h-[420px]" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0B0718]/90 via-[#0B0718]/30 to-transparent" />
-          <div className="w-head absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-5 p-6 sm:p-10">
+          {/* no celular a faixa é estreita: usa o recorte centralizado no mascote */}
+          <picture>
+            <source media="(max-width: 767px)" srcSet={wideOf(w.id)} />
+            <img src={bannerOf(w.id)} alt={`${w.mascot}, mascote de ${w.name}`} width={2800} height={824} className="w-banner h-[230px] w-full object-cover sm:h-[300px] md:h-[420px] md:object-[24%_center]" />
+          </picture>
+          <div className="absolute inset-0 hidden bg-gradient-to-t from-[#0B0718]/90 via-[#0B0718]/30 to-transparent md:block" />
+          {/* no celular o texto fica abaixo da imagem, sem cobrir o mascote */}
+          <div className="w-head relative flex md:absolute md:inset-x-0 md:bottom-0 flex-wrap items-end justify-between gap-5 p-6 sm:p-10">
             <div>
               <Link to="/#mundos" className="chip mb-4 hover:bg-fg/15"><Icon name="arrow-left" size={13} /> Todos os mundos</Link>
               <p className="kicker world-text">Guia: {w.mascot}</p>

@@ -2,7 +2,7 @@ import { lazy, Suspense, useRef } from "react";
 import { motion, useScroll, useSpring, useTransform } from "framer-motion";
 import { Link } from "react-router-dom";
 import { gsap, ScrollTrigger, SplitText, useGSAP, reducedMotion } from "../lib/gsap";
-import { WORLDS, bannerOf } from "../data/categories";
+import { WORLDS, wideOf } from "../data/categories";
 import { BLOGS } from "../data/blogs";
 import { BADGES, TOTAL_MISSIONS, XP } from "../data/game";
 import { useSession } from "../lib/session";
@@ -293,7 +293,7 @@ export default function Home() {
           {FEATURED.map(({ w, index, blog }) => (
             <Link key={`${w.id}-${index}`} to={`/mundo/${w.id}/${index}`} className="group block w-[78vw] max-w-[320px] shrink-0 snap-start sm:w-[300px] lg:w-[340px] lg:max-w-none" style={{ "--c": w.c, "--deep": w.deep }}>
               <Tilt max={8} className="h-full overflow-hidden rounded-[28px] border-2 border-fg/10 bg-surface shadow-[0_20px_50px_-25px_rgba(60,30,120,.35)] transition-colors group-hover:border-[color:var(--c)]">
-                <div className="art h-36 transition-transform duration-500 group-hover:scale-105 sm:h-44" style={{ "--img": `url(${bannerOf(w.id)})`, backgroundColor: w.c }} />
+                <div className="art h-36 transition-transform duration-500 group-hover:scale-105 sm:h-44" style={{ "--img": `url(${wideOf(w.id)})`, backgroundColor: w.c, backgroundSize: "cover", backgroundPosition: "center 40%" }} />
                 <div className="relative p-5 sm:p-6">
                   <span className="chip chip-world">{w.name.split(" ")[0]}</span>
                   <h3 className="display mt-3 line-clamp-3 min-h-[3.9em] text-base font-bold leading-snug sm:mt-4 sm:text-lg">{blog.title}</h3>

@@ -8,6 +8,7 @@ import { useSession } from "../lib/session";
 import { progressOf } from "../lib/store";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
+import Loading from "../components/Loading";
 import { Composer, PostCard } from "../components/Post";
 
 function SideTitle({ icon, children }) {
@@ -35,7 +36,9 @@ export default function Community() {
 
   useGSAP(() => {
     if (!reducedMotion()) gsap.from(".side > *", { y: 30, opacity: 0, duration: 0.6, stagger: 0.08, ease: "power3.out" });
-  }, { scope: root });
+  }, { scope: root, dependencies: [state.ready] });
+
+  if (!state.ready) return <Loading label="Carregando a comunidade…" />;
 
   return (
     <div ref={root} className="mx-auto grid max-w-6xl gap-6 px-4 pt-24 lg:grid-cols-[230px_minmax(0,1fr)_300px]" style={{ "--c": w?.c || "#8B3DFF" }}>
@@ -142,7 +145,10 @@ export default function Community() {
         </section>
 
         <section className="panel p-5">
-          <SideTitle icon="trophy">Ranking</SideTitle>
+          <div className="flex items-center justify-between">
+            <SideTitle icon="trophy">Ranking</SideTitle>
+            <Link to="/ranking" className="text-xs font-extrabold text-brand-600 hover:underline">Ver todos</Link>
+          </div>
           {ranking.length === 0 ? (
             <p className="mt-4 text-sm text-mist">Ainda não há jogadores por aqui. O primeiro lugar está vago.</p>
           ) : (
